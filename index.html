@@ -1,0 +1,791 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Happy Birthday Bubby! 🎂</title>
+    
+    <!-- External Libraries -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tween.js/18.6.4/tween.umd.js"></script>
+
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            overflow: hidden; 
+            color: black;
+            background: radial-gradient(circle at 50% 40%, #1a237e 0%, #000000 80%); 
+        }
+
+        /* --- TERMINAL --- */
+        #terminal { 
+            width: 100vw; height: 100vh; background: #000000; 
+            color: #000; 
+            padding: 40px; font-size: 20px; line-height: 1.8; position: fixed; 
+            top: 0; left: 0; z-index: 1000; display: flex; flex-direction: column; 
+            justify-content: flex-start; transition: opacity 1s ease-out; 
+            font-family: 'Courier New', monospace;
+            font-weight: 700;
+            border-bottom: 5px solid #ffd700;
+        }
+        #terminal.hidden { opacity: 0; pointer-events: none; }
+        
+        .terminal-line { 
+            white-space: pre-wrap; margin: 5px 0; 
+            animation: rainbowText 4s infinite linear;
+        }
+
+        @keyframes rainbowText {
+            0% { color: #ff0000; text-shadow: 0 0 10px rgba(255,0,0,0.5); }
+            20% { color: #ff7f00; text-shadow: 0 0 10px rgba(255,127,0,0.5); }
+            40% { color: #ffff00; text-shadow: 0 0 10px rgba(255,255,0,0.5); }
+            60% { color: #00ff00; text-shadow: 0 0 10px rgba(0,255,0,0.5); }
+            80% { color: #0000ff; text-shadow: 0 0 10px rgba(0,255,0,0.5); }
+            100% { color: #8b00ff; text-shadow: 0 0 10px rgba(139,0,255,0.5); }
+        }
+
+        /* --- MUSEUM FRAME --- */
+        #museum-frame-container {
+            position: fixed; 
+            top: 0; left: 0; width: 100vw; height: 100vh;
+            display: flex;
+            justify-content: center; 
+            align-items: center;     
+            z-index: -1; 
+            pointer-events: none; 
+            opacity: 0;
+            transform: scale(0.8);
+            transition: all 1.5s cubic-bezier(0.19, 1, 0.22, 1); 
+        }
+        #museum-frame-container.visible { opacity: 1; transform: scale(1); }
+
+        .museum-frame {
+            width: 70vw; height: 45vw; 
+            max-width: 1000px; max-height: 700px;
+            background: #000;
+            border: 15px solid #d4af37; 
+            outline: 4px solid #8a6e2f; 
+            box-shadow: 0 0 0 10px #111, 0 30px 60px rgba(0,0,0,0.9), inset 0 0 30px rgba(0,0,0,0.9);
+            overflow: hidden;
+            position: relative;
+        }
+        .museum-frame::after {
+            content: ''; position: absolute; top: 5px; left: 5px; right: 5px; bottom: 5px;
+            border: 3px solid #ffffff; pointer-events: none;
+        }
+        .museum-frame img { width: 100%; height: 100%; object-fit: cover; opacity: 0.9; }
+
+        /* --- Main 3D Scene --- */
+        #container { width: 100vw; height: 100vh; position: relative; opacity: 0; transition: opacity 2s ease-in; }
+        #container.visible { opacity: 1; }
+        #canvas3d { width: 100%; height: 100%; display: block; cursor: grab; }
+        #canvas3d:active { cursor: grabbing; }
+
+        /* --- Camera Feed --- */
+        #videoElement { 
+            position: absolute; 
+            top: 20px; right: 20px;
+            width: 280px; height: 210px; 
+            border-radius: 20px; 
+            transform: scaleX(-1); 
+            z-index: 2000; 
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.8); 
+            object-fit: cover; 
+            border: 5px solid #d32f2f; 
+            background: #000000 !important;
+            display: block;
+        }
+        #videoElement::after {
+            content: "LIVE CAMERA"; position: absolute; top: 15px; left: 15px;
+            background: rgba(211, 47, 47, 0.9); color: white; padding: 4px 10px; font-size: 11px;
+            border-radius: 4px; font-weight: bold; transform: scaleX(-1);
+            box-shadow: 0 0 10px rgba(211, 47, 47, 0.6);
+        }
+
+        /* --- Other UI --- */
+        #startCameraBtn {
+            position: absolute; top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 100;
+            padding: 15px 30px; font-size: 20px;
+            background: #4caf50; color: white;
+            border: none; border-radius: 50px; cursor: pointer;
+            display: none;
+            font-weight: bold;
+        }
+        #startCameraBtn:hover { background: #45a049; transform: translate(-50%, -50%) scale(1.1); }
+
+        #loading { 
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); 
+            color: white; font-size: 20px; text-align: center; z-index: 60; 
+            display: none; background: rgba(0,0,0,0.9); padding: 30px 50px; 
+            border-radius: 20px; border: 2px solid #d32f2f;
+        }
+        .spinner { 
+            border: 4px solid rgba(255, 255, 255, 0.1); border-top: 4px solid #d32f2f; 
+            border-radius: 50%; width: 50px; height: 50px; animation: spin 1s linear infinite; margin: 0 auto 20px; 
+        }
+        @keyframes spin { 100% { transform: rotate(360deg); } }
+
+        #birthdayCardPopup { 
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%) scale(0.9); 
+            background: linear-gradient(135deg, #101540 0%, #283593 100%); 
+            border: 2px solid #ffd700; 
+            padding: 40px; border-radius: 10px; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.8); 
+            z-index: 150; max-width: 600px; width: 90%;
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); 
+            display: none; text-align: center;
+        }
+        #birthdayCardPopup.visible { transform: translate(-50%, -50%) scale(1); display: block; }
+        
+        #birthdayCardPopup h1 { color: #ffd700; margin-bottom: 15px; font-size: 38px; font-family: 'Georgia', serif; text-transform: uppercase; letter-spacing: 2px; border-bottom: 1px solid rgba(255,215,0,0.3); padding-bottom: 10px; }
+        .message { color: #e0e0e0; line-height: 1.8; font-size: 18px; font-family: 'Segoe UI', sans-serif; margin-bottom: 25px; }
+        .date { font-weight: bold; color: #90caf9; margin-bottom: 15px; display: block; text-transform: uppercase; letter-spacing: 2px; font-size: 14px;}
+        .italic { font-style: italic; color: #b0bec5; font-family: 'Georgia', serif; }
+        .love { font-size: 24px; font-weight: bold; color: #ffd700; margin-top: 25px; display: block; }
+
+        button { 
+            background: #ffd700; color: #101540; border: none; 
+            padding: 14px 40px; font-size: 18px; border-radius: 4px; cursor: pointer; 
+            transition: all 0.2s; font-weight: 700; 
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            text-transform: uppercase;
+        }
+        button:hover { background: #ffea00; transform: translateY(-2px); box-shadow: 0 6px 12px rgba(255,215,0,0.4); }
+
+        #celebration { 
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); 
+            font-size: 60px; font-weight: 900; color: #fff; text-shadow: 0 5px 15px rgba(0,0,0,0.5); 
+            display: none; z-index: 200; pointer-events: none; text-align: center; 
+            background: -webkit-linear-gradient(#ffd700, #ffffff);
+            -webkit-background-clip: text; background-clip: text; 
+            -webkit-text-fill-color: transparent;
+            font-family: 'Impact', sans-serif;
+            letter-spacing: 2px;
+        }
+
+        .firework { position: absolute; width: 6px; height: 6px; border-radius: 50%; pointer-events: none; }
+        .confetti { position: absolute; width: 10px; height: 10px; pointer-events: none; }
+        
+        #cursor-hint {
+            position: absolute; bottom: 20px; left: 20px;
+            color: rgba(255,255,255,0.8); font-size: 15px;
+            pointer-events: none; z-index: 10;
+            background: rgba(0,0,0,0.6); padding: 8px 15px; border-radius: 8px;
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+    </style>
+</head>
+<body>
+
+    <div id="museum-frame-container">
+        <div class="museum-frame">
+            <img src="us.png" alt="Us">
+        </div>
+    </div>
+
+    <div id="terminal"><div id="terminal-content"></div></div>
+    <div id="cursor-hint">🖱️ Drag to Rotate • 🖱️ Click Blue Card</div>
+
+    <button id="startCameraBtn" onclick="initMediaPipe()">📷 RETRY CAMERA</button>
+
+    <div id="birthdayCardPopup">
+        <h1>Happy Birthday</h1>
+        <div class="message">
+            <p class="date">February 14th, 2026</p>
+            <p>May this year bring you strength, success, and happiness. Keep being the amazing person you are.</p>
+            <p class="italic">Cheers to another year of greatness!</p>
+            <p class="love">Best Wishes, Babe! 🤝</p>
+        </div>
+        <button onclick="closeCardPopup()">Close</button>
+    </div>
+
+    <div id="container">
+        <canvas id="canvas3d"></canvas>
+        <video id="videoElement" autoplay playsinline muted></video>
+        
+        <div id="loading">
+            <div class="spinner"></div>
+            <p id="loading-text">Initializing Surprise...</p>
+            <small>Turning on Camera 📸</small>
+        </div>
+        
+        <div id="celebration">HAPPY BIRTHDAY<br>BUBBY &lt;3</div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            
+            const birthdaySong = new Audio('birthday.mp3');
+            birthdaySong.loop = true;
+            birthdaySong.volume = 0.5;
+
+            // --- TERMINAL ---
+            const terminalLines = [ 
+                '> initializing connection to my favorite person...', 
+                '...',
+                '> connecting to bubby\'s heart...',
+                '...', 
+                '> happy valentine\'s day & happy birthday, bubby :3', 
+                '...', 
+                '> preparing a small and cute moment for you ^^',
+                '...', 
+                '> !(◕‿◕)? !(◕‿◕)? !(◕‿◕)?', 
+                '...', 
+                '> loading ...', 
+                '> [████████████████████] 100%'
+            ];
+
+            async function typeTerminal() {
+                const terminal = document.getElementById('terminal-content');
+                for (let lineIndex = 0; lineIndex < terminalLines.length; lineIndex++) {
+                    const currentLine = terminalLines[lineIndex];
+                    const lineDiv = document.createElement('div');
+                    lineDiv.className = 'terminal-line';
+                    terminal.appendChild(lineDiv);
+
+                    for (let charIndex = 0; charIndex < currentLine.length; charIndex++) {
+                        lineDiv.textContent = currentLine.substring(0, charIndex + 1) + '█';
+                        await new Promise(r => setTimeout(r, 50));
+                    }
+                    lineDiv.textContent = currentLine;
+                    await new Promise(r => setTimeout(r, 200));
+                }
+                setTimeout(() => { 
+                    document.getElementById('terminal').classList.add('hidden'); 
+                    startExperience(); 
+                }, 800);
+            }
+            typeTerminal();
+
+            // --- THREE.JS SETUP ---
+            let scene, camera, renderer, cakeGroup;
+            let greetingCard;
+            let candlesBlown = false, raycaster, mouse;
+            let hands, videoElement, isBlowing = false, blowStartTime = 0;
+            let isDragging = false;
+            let isPopupOpen = false; // NEW: Flag untuk blokir rotasi
+            let windParticles = [];
+            let sceneGroup; 
+
+            function startExperience() {
+                document.getElementById('museum-frame-container').classList.add('visible');
+                document.getElementById('container').classList.add('visible');
+                initThree();
+            }
+
+            function initThree() {
+                scene = new THREE.Scene();
+                scene.fog = new THREE.FogExp2(0x000000, 0.015); 
+
+                camera = new THREE.PerspectiveCamera(40, window.innerWidth / window.innerHeight, 0.1, 100);
+                camera.position.set(0, 3.0, 19); 
+                camera.lookAt(0, 2.0, 0);
+
+                renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('canvas3d'), antialias: true, alpha: true });
+                renderer.setSize(window.innerWidth, window.innerHeight);
+                renderer.shadowMap.enabled = true;
+                renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+                renderer.toneMapping = THREE.ACESFilmicToneMapping;
+                renderer.toneMappingExposure = 1.3; 
+
+                // LIGHTING
+                scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+                
+                const spotLight = new THREE.SpotLight(0xfffaed, 2.0);
+                spotLight.position.set(5, 15, 15);
+                spotLight.angle = Math.PI / 3.5;
+                spotLight.penumbra = 0.3;
+                spotLight.castShadow = true;
+                spotLight.shadow.mapSize.width = 1024;
+                spotLight.shadow.mapSize.height = 1024;
+                scene.add(spotLight);
+
+                const bouquetLight = new THREE.PointLight(0xffffff, 1.0, 5);
+                bouquetLight.position.set(4, 4, -2);
+                scene.add(bouquetLight);
+
+                // --- BUILD SCENE ---
+                sceneGroup = new THREE.Group();
+                sceneGroup.position.y = -2.5; // Meja diturunkan
+                scene.add(sceneGroup);
+                
+                createTable();
+                createCake(); 
+                createPhotoFrame();
+                createBouquet(); 
+                createGreetingCard(); 
+
+                // EVENTS
+                raycaster = new THREE.Raycaster();
+                mouse = new THREE.Vector2();
+
+                const canvas = document.getElementById('canvas3d');
+                canvas.addEventListener('mousedown', () => isDragging = true);
+                canvas.addEventListener('mouseup', () => isDragging = false);
+                canvas.addEventListener('mousemove', onMouseMove);
+                canvas.addEventListener('click', onCanvasClick);
+                window.addEventListener('resize', onWindowResize);
+
+                animate();
+            }
+
+            // --- OBJECTS ---
+            function createTable() {
+                const tableGroup = new THREE.Group();
+                const tableTop = new THREE.Mesh(
+                    new THREE.BoxGeometry(20, 0.4, 14), 
+                    new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.2, metalness: 0.0 })
+                );
+                tableTop.position.y = -0.1;
+                tableTop.receiveShadow = true;
+                tableGroup.add(tableTop);
+                
+                const legGeo = new THREE.CylinderGeometry(0.3, 0.15, 4.0, 32);
+                const legMat = new THREE.MeshStandardMaterial({ color: 0x111111, metalness: 0.8, roughness: 0.1 });
+                
+                [[-9, -6.5], [9, -6.5], [-9, 6.5], [9, 6.5]].forEach(pos => {
+                    const leg = new THREE.Mesh(legGeo, legMat);
+                    leg.position.set(pos[0], -2.1, pos[1]);
+                    leg.castShadow = true;
+                    leg.receiveShadow = true;
+                    tableGroup.add(leg);
+                });
+                sceneGroup.add(tableGroup);
+            }
+
+            function createPhotoFrame() {
+                const group = new THREE.Group();
+                const frame = new THREE.Mesh(
+                    new THREE.BoxGeometry(1.6, 2.1, 0.12), 
+                    new THREE.MeshStandardMaterial({ color: 0x424242, metalness: 0.6, roughness: 0.2 }) 
+                );
+                frame.castShadow = true;
+                group.add(frame);
+                
+                const loader = new THREE.TextureLoader();
+                let texture;
+                try { texture = loader.load('love.jpeg'); } catch(e) { texture = null; }
+
+                const photo = new THREE.Mesh(
+                    new THREE.PlaneGeometry(1.4, 1.9), 
+                    new THREE.MeshStandardMaterial({ map: texture, color: 0xffffff, roughness: 0.4 })
+                );
+                photo.position.z = 0.07;
+                group.add(photo);
+                
+                group.position.set(-4.0, 1.8, 1.0);
+                group.rotation.y = Math.PI / 5;
+                sceneGroup.add(group);
+            }
+
+            function createGreetingCard() {
+                const group = new THREE.Group();
+                const canvas = document.createElement('canvas');
+                canvas.width = 512; canvas.height = 512;
+                const ctx = canvas.getContext('2d');
+                
+                const grad = ctx.createLinearGradient(0,0,512,512);
+                grad.addColorStop(0, '#1a237e'); grad.addColorStop(1, '#000000');
+                ctx.fillStyle = grad; ctx.fillRect(0,0,512,512);
+                
+                ctx.strokeStyle = '#ffd700'; ctx.lineWidth = 20; ctx.strokeRect(10,10,492,492);
+                
+                ctx.fillStyle = '#ffd700'; 
+                ctx.font='bold 80px Georgia'; ctx.textAlign='center';
+                ctx.fillText('HAPPY', 256, 200);
+                ctx.fillText('BIRTHDAY', 256, 300);
+                
+                const texture = new THREE.CanvasTexture(canvas);
+                const mat = new THREE.MeshStandardMaterial({ map: texture, roughness: 0.4 });
+
+                const cardBody = new THREE.Mesh(new THREE.BoxGeometry(2.2, 1.4, 0.05), mat);
+                cardBody.castShadow = true;
+                cardBody.receiveShadow = true;
+                cardBody.userData.isCard = true;
+                group.add(cardBody);
+
+                group.position.set(4.0, 0.1, 2.0);
+                group.rotation.x = -Math.PI / 2;
+                group.rotation.z = 0.1;
+                
+                sceneGroup.add(group);
+                greetingCard = group;
+            }
+
+            function createMarbleTexture() {
+                const canvas = document.createElement('canvas');
+                canvas.width = 512; canvas.height = 512;
+                const ctx = canvas.getContext('2d');
+                ctx.fillStyle = '#050505';
+                ctx.fillRect(0, 0, 512, 512);
+                for(let i=0; i<60; i++) {
+                    ctx.beginPath();
+                    ctx.strokeStyle = `rgba(255,255,255,${Math.random() * 0.2})`;
+                    ctx.lineWidth = Math.random() * 5;
+                    ctx.moveTo(Math.random() * 512, Math.random() * 512);
+                    ctx.bezierCurveTo(Math.random() * 512, Math.random() * 512, Math.random() * 512, Math.random() * 512, Math.random() * 512, Math.random() * 512);
+                    ctx.stroke();
+                }
+                return new THREE.CanvasTexture(canvas);
+            }
+
+            function createBouquet() {
+                const group = new THREE.Group();
+                const marbleMat = new THREE.MeshStandardMaterial({ map: createMarbleTexture(), roughness: 0.2, metalness: 0.1 });
+                const vaseGeo = new THREE.LatheGeometry([new THREE.Vector2(0.5, -1.5), new THREE.Vector2(0.6, -1), new THREE.Vector2(0.8, 0), new THREE.Vector2(0.6, 1), new THREE.Vector2(0.5, 1.5)], 64);
+                const vase = new THREE.Mesh(vaseGeo, marbleMat);
+                vase.position.y = 1.0; 
+                vase.castShadow = true;
+                group.add(vase);
+
+                const roseMat = new THREE.MeshStandardMaterial({ color: 0xb71c1c, roughness: 0.3, emissive: 0x300000 });
+                const stemMat = new THREE.MeshStandardMaterial({ color: 0x1b5e20 });
+
+                for(let i=0; i<12; i++) {
+                    const h = 3.5 + Math.random() * 0.8; 
+                    const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, h, 8), stemMat);
+                    stem.position.y = h/2;
+                    
+                    const head = new THREE.Mesh(new THREE.DodecahedronGeometry(0.18), roseMat);
+                    head.position.y = h;
+                    
+                    const flowerEnt = new THREE.Group();
+                    flowerEnt.add(stem);
+                    flowerEnt.add(head);
+                    
+                    const angle = (i / 12) * Math.PI * 2;
+                    flowerEnt.position.set(Math.cos(angle)*0.2, 0, Math.sin(angle)*0.2);
+                    flowerEnt.rotation.x = (Math.random()-0.5)*0.5;
+                    flowerEnt.rotation.z = (Math.random()-0.5)*0.5;
+                    group.add(flowerEnt);
+                }
+                group.position.set(5.0, 0.15, -2.5);
+                sceneGroup.add(group);
+            }
+
+            function createCake() {
+                cakeGroup = new THREE.Group();
+                
+                const matSponge = new THREE.MeshStandardMaterial({ color: 0x3e2723, roughness: 0.8 }); 
+                const matGanache = new THREE.MeshStandardMaterial({ color: 0x5d4037, roughness: 0.3 }); 
+                const matChocoBar = new THREE.MeshStandardMaterial({ color: 0xcfd8dc, roughness: 0.1, metalness: 0.1 });
+
+                const b1 = new THREE.Mesh(new THREE.CylinderGeometry(1.4, 1.4, 0.6, 64), matSponge); 
+                b1.position.y = 0.3; b1.castShadow = true; b1.receiveShadow = true;
+                cakeGroup.add(b1);
+                const g1 = new THREE.Mesh(new THREE.CylinderGeometry(1.45, 1.45, 0.1, 64), matGanache); 
+                g1.position.y = 0.6; 
+                cakeGroup.add(g1);
+
+                const b2 = new THREE.Mesh(new THREE.CylinderGeometry(1.1, 1.1, 0.5, 64), matSponge); 
+                b2.position.y = 0.95; b2.castShadow = true; 
+                cakeGroup.add(b2);
+                const g2 = new THREE.Mesh(new THREE.CylinderGeometry(1.15, 1.15, 0.1, 64), matGanache); 
+                g2.position.y = 1.25; 
+                cakeGroup.add(g2);
+
+                const b3 = new THREE.Mesh(new THREE.CylinderGeometry(0.75, 0.75, 0.4, 64), matSponge); 
+                b3.position.y = 1.6; b3.castShadow = true; 
+                cakeGroup.add(b3);
+                const g3 = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 0.8, 0.08, 64), matGanache); 
+                g3.position.y = 1.85; 
+                cakeGroup.add(g3);
+
+                for(let i=0; i<10; i++) { 
+                    const angle = (i/10) * Math.PI * 2;
+                    const sq = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.05, 0.45), matChocoBar);
+                    sq.position.set(Math.cos(angle)*1.1, 0.6, Math.sin(angle)*1.1);
+                    sq.rotation.y = -angle;
+                    cakeGroup.add(sq);
+                }
+
+                window.flames = [];
+                window.flameLights = [];
+                
+                for(let i=0; i<5; i++) {
+                    const angle = (i / 5) * Math.PI * 2;
+                    const x = Math.cos(angle) * 0.45;
+                    const z = Math.sin(angle) * 0.45;
+
+                    const body = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.5), new THREE.MeshLambertMaterial({color:0xf8f8ff}));
+                    body.position.set(x, 2.05, z); cakeGroup.add(body);
+                    
+                    const flameGeo = new THREE.ConeGeometry(0.04, 0.15, 8);
+                    const flameMat = new THREE.MeshBasicMaterial({ color: 0xffaa00 });
+                    const flame = new THREE.Mesh(flameGeo, flameMat);
+                    flame.position.set(x, 2.35, z);
+                    cakeGroup.add(flame);
+                    window.flames.push(flame);
+                    
+                    const light = new THREE.PointLight(0xffaa00, 0.8, 2);
+                    light.position.set(x, 2.2, z);
+                    cakeGroup.add(light);
+                    window.flameLights.push(light);
+                }
+
+                sceneGroup.add(cakeGroup);
+            }
+
+            function spawnWindParticle(pos) {
+                if(Math.random() > 0.5) return; 
+                const geo = new THREE.BoxGeometry(0.03, 0.03, 0.03);
+                const mat = new THREE.MeshBasicMaterial({ color: 0xffcc00, transparent:true, opacity:0.8 });
+                const p = new THREE.Mesh(geo, mat);
+                p.position.copy(pos);
+                p.position.y += 0.1;
+                p.userData = { life: 1.0, velocity: new THREE.Vector3((Math.random()-0.5)*0.1, -0.1 - Math.random()*0.1, (Math.random()-0.5)*0.1) };
+                scene.add(p);
+                windParticles.push(p);
+            }
+
+            function triggerConfettiSurprise() {
+                const colors = ['#ff0', '#f0f', '#0ff', '#f00', '#0f0'];
+                for(let i=0; i<80; i++) {
+                    const div = document.createElement('div');
+                    div.className = 'confetti';
+                    div.style.backgroundColor = colors[Math.floor(Math.random()*colors.length)];
+                    div.style.left = '50%'; div.style.top = '50%';
+                    document.body.appendChild(div);
+                    
+                    const angle = Math.random() * Math.PI * 2;
+                    const dist = 100 + Math.random() * 400;
+                    const tx = Math.cos(angle) * dist;
+                    const ty = Math.sin(angle) * dist - 200; 
+                    
+                    div.animate([
+                        { transform: 'translate(0,0) rotate(0deg)', opacity: 1 },
+                        { transform: `translate(${tx}px, ${ty}px) rotate(${Math.random()*720}deg)`, opacity: 0 }
+                    ], { duration: 1500 + Math.random()*1000, easing: 'cubic-bezier(0.25, 1, 0.5, 1)' })
+                    .onfinish = () => div.remove();
+                }
+            }
+
+            // --- LOGIC ---
+            function onMouseMove(e) {
+                // PERBAIKAN: Rotasi hanya jika drag DAN popup tidak terbuka
+                if (isDragging && !isPopupOpen) {
+                    targetRotationY += e.movementX * 0.005;
+                    targetRotationX += e.movementY * 0.005;
+                    targetRotationX = Math.max(-0.5, Math.min(0.5, targetRotationX));
+                }
+            }
+
+            function onCanvasClick(e) {
+                // Jika popup terbuka, jangan lakukan apa-apa
+                if(isPopupOpen) return;
+
+                mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+                mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+                
+                raycaster.setFromCamera(mouse, camera);
+                const intersects = raycaster.intersectObjects(sceneGroup.children, true);
+                
+                if (intersects.length > 0) {
+                    const found = intersects.find(hit => hit.object.userData.isCard);
+                    if (found) {
+                        openGreetingCard();
+                    }
+                }
+            }
+
+            window.closeCardPopup = function() {
+                document.getElementById('birthdayCardPopup').classList.remove('visible');
+                isPopupOpen = false; // Reset flag
+                triggerConfettiSurprise();
+                if(!hands) {
+                    initMediaPipe();
+                }
+            }
+
+            function openGreetingCard() {
+                isPopupOpen = true; // Set flag untuk blokir rotasi
+                document.getElementById('birthdayCardPopup').classList.add('visible');
+                if (birthdaySong) {
+                    birthdaySong.play().catch(e => console.log("Audio blocked", e));
+                }
+            }
+
+            function initMediaPipe() {
+                const loading = document.getElementById('loading');
+                const loadingText = document.getElementById('loading-text');
+                loading.style.display = 'block';
+                loadingText.innerText = "Connecting Camera...";
+                
+                videoElement = document.getElementById('videoElement');
+
+                // Check File Protocol
+                if (window.location.protocol === 'file:') {
+                    loadingText.innerText = "ERROR: Use Live Server";
+                    document.getElementById('startCameraBtn').style.display = 'block';
+                    return;
+                }
+
+                if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                    loadingText.innerText = "Browser Not Supported";
+                    return;
+                }
+
+                // MediaPipe Hands Setup
+                hands = new Hands({locateFile: (file) => {
+                    return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
+                }});
+                
+                hands.setOptions({
+                    maxNumHands: 1,
+                    modelComplexity: 1,
+                    minDetectionConfidence: 0.5,
+                    minTrackingConfidence: 0.5
+                });
+                
+                hands.onResults(onResults);
+
+                // PERBAIKAN: Menggunakan Camera Utility dari MediaPipe
+                // Ini cara paling stabil untuk handle stream & permission
+                const mpCamera = new Camera(videoElement, {
+                    onFrame: async () => {
+                        if (hands) {
+                            await hands.send({image: videoElement});
+                        }
+                    },
+                    width: 640,
+                    height: 480
+                });
+
+                mpCamera.start()
+                .then(() => {
+                    loading.style.display = 'none';
+                    console.log("Camera started successfully via MediaPipe Utility");
+                })
+                .catch(err => {
+                    console.error("Camera start failed:", err);
+                    loadingText.innerText = "Camera Access Denied/Failed";
+                    document.getElementById('startCameraBtn').style.display = 'block';
+                });
+            }
+
+            function onResults(results) {
+                if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0 && !candlesBlown) {
+                    const lm = results.multiHandLandmarks[0];
+                    const tips = [8,12,16,20]; 
+                    const avg = tips.reduce((acc, i) => ({x: acc.x+lm[i].x, y: acc.y+lm[i].y}), {x:0,y:0});
+                    avg.x /= 4; avg.y /= 4;
+                    const isClose = tips.every(i => Math.hypot(lm[i].x-avg.x, lm[i].y-avg.y) < 0.05);
+                    
+                    if (isClose) {
+                        if (!isBlowing) {
+                            isBlowing = true;
+                            blowStartTime = performance.now();
+                        }
+                        if(window.flames) window.flames.forEach(f => spawnWindParticle(f.position));
+                    } else {
+                        isBlowing = false;
+                    }
+                } else {
+                    isBlowing = false;
+                }
+            }
+
+            // --- ANIMATION LOOP ---
+            let targetRotationX = 0, targetRotationY = 0;
+            let currentRotationX = 0, currentRotationY = 0;
+
+            function animate() {
+                requestAnimationFrame(animate);
+                TWEEN.update();
+
+                currentRotationY += (targetRotationY - currentRotationY) * 0.05;
+                currentRotationX += (targetRotationX - currentRotationX) * 0.05;
+                
+                scene.rotation.y = currentRotationY;
+                scene.rotation.x = currentRotationX;
+
+                if (window.flames && !candlesBlown) {
+                    const t = performance.now();
+                    window.flames.forEach((f, i) => {
+                        const scale = 1 + Math.sin(t * 0.015 + i) * 0.3;
+                        f.scale.set(scale, scale, scale);
+                        if(window.flameLights[i]) window.flameLights[i].intensity = 0.8 + Math.sin(t * 0.015 + i) * 0.4;
+                    });
+                }
+
+                for(let i = windParticles.length - 1; i >= 0; i--) {
+                    const p = windParticles[i];
+                    p.position.add(p.userData.velocity);
+                    p.userData.life -= 0.02;
+                    p.material.opacity = p.userData.life;
+                    if(p.userData.life <= 0) {
+                        scene.remove(p);
+                        windParticles.splice(i, 1);
+                    }
+                }
+
+                if (isBlowing && !candlesBlown) {
+                    if (performance.now() - blowStartTime > 2000) {
+                        blowOutCandles();
+                    }
+                }
+
+                renderer.render(scene, camera);
+            }
+
+            function blowOutCandles() {
+                candlesBlown = true;
+                window.flames.forEach((f, i) => {
+                    new TWEEN.Tween({ s: 1, i: 0.8 })
+                        .to({ s: 0.01, i: 0 }, 800)
+                        .delay(i * 100)
+                        .easing(TWEEN.Easing.Quadratic.Out)
+                        .onUpdate(function() {
+                            f.scale.set(this.s, this.s, this.s);
+                            if(window.flameLights[i]) window.flameLights[i].intensity = this.i;
+                        })
+                        .start();
+                });
+                setTimeout(startCelebration, 1500);
+            }
+
+            function startCelebration() {
+                const el = document.getElementById('celebration');
+                el.style.display = 'block';
+                el.animate([
+                    { transform: 'translate(-50%, -50%) scale(0.5)', opacity: 0 },
+                    { transform: 'translate(-50%, -50%) scale(1.2)', opacity: 1, offset: 0.7 },
+                    { transform: 'translate(-50%, -50%) scale(1)', opacity: 1 }
+                ], { duration: 1000, fill: 'forwards' });
+
+                const colors = ['#ffd700', '#1a237e', '#ffffff', '#ff4081'];
+                for(let i=0; i<60; i++) {
+                    setTimeout(() => {
+                        const div = document.createElement('div');
+                        div.className = 'firework';
+                        div.style.backgroundColor = colors[Math.floor(Math.random()*colors.length)];
+                        div.style.left = '50%'; div.style.top = '50%';
+                        document.body.appendChild(div);
+                        const angle = Math.random() * Math.PI * 2;
+                        const dist = 150 + Math.random() * 250;
+                        const tx = Math.cos(angle) * dist;
+                        const ty = Math.sin(angle) * dist;
+                        div.animate([
+                            { transform: 'translate(0,0) scale(1)', opacity: 1 },
+                            { transform: `translate(${tx}px, ${ty}px) scale(0)`, opacity: 0 }
+                        ], { duration: 800 + Math.random()*800, easing: 'cubic-bezier(0, .9, .57, 1)' })
+                        .onfinish = () => div.remove();
+                    }, i * 30);
+                }
+                setTimeout(() => el.style.display = 'none', 5000);
+            }
+
+            function onWindowResize() {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            }
+        });
+    </script>
+</body>
+</html>
