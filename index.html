@@ -268,7 +268,7 @@
             let candlesBlown = false, raycaster, mouse;
             let hands, videoElement, isBlowing = false, blowStartTime = 0;
             let isDragging = false;
-            let isPopupOpen = false; // NEW: Flag untuk blokir rotasi
+            let isPopupOpen = false;
             let windParticles = [];
             let sceneGroup; 
 
@@ -305,13 +305,13 @@
                 spotLight.shadow.mapSize.height = 1024;
                 scene.add(spotLight);
 
-                const bouquetLight = new THREE.PointLight(0xffffff, 1.0, 5);
-                bouquetLight.position.set(4, 4, -2);
+                const bouquetLight = new THREE.PointLight(0xffffff, 1.5, 8);
+                bouquetLight.position.set(5, 4, -2);
                 scene.add(bouquetLight);
 
                 // --- BUILD SCENE ---
                 sceneGroup = new THREE.Group();
-                sceneGroup.position.y = -2.5; // Meja diturunkan
+                sceneGroup.position.y = -2.5;
                 scene.add(sceneGroup);
                 
                 createTable();
@@ -369,7 +369,7 @@
                 
                 const loader = new THREE.TextureLoader();
                 let texture;
-                try { texture = loader.load('love.jpeg'); } catch(e) { texture = null; }
+                try { texture = loader.load('us.png'); } catch(e) { texture = null; }
 
                 const photo = new THREE.Mesh(
                     new THREE.PlaneGeometry(1.4, 1.9), 
@@ -421,12 +421,12 @@
                 const canvas = document.createElement('canvas');
                 canvas.width = 512; canvas.height = 512;
                 const ctx = canvas.getContext('2d');
-                ctx.fillStyle = '#050505';
+                ctx.fillStyle = '#1a1a1a';
                 ctx.fillRect(0, 0, 512, 512);
-                for(let i=0; i<60; i++) {
+                for(let i=0; i<80; i++) {
                     ctx.beginPath();
-                    ctx.strokeStyle = `rgba(255,255,255,${Math.random() * 0.2})`;
-                    ctx.lineWidth = Math.random() * 5;
+                    ctx.strokeStyle = `rgba(255,255,255,${Math.random() * 0.15})`;
+                    ctx.lineWidth = Math.random() * 8;
                     ctx.moveTo(Math.random() * 512, Math.random() * 512);
                     ctx.bezierCurveTo(Math.random() * 512, Math.random() * 512, Math.random() * 512, Math.random() * 512, Math.random() * 512, Math.random() * 512);
                     ctx.stroke();
@@ -434,37 +434,271 @@
                 return new THREE.CanvasTexture(canvas);
             }
 
+            // BEAUTIFUL BOUQUET WITH NATURAL FLOWERS
             function createBouquet() {
                 const group = new THREE.Group();
-                const marbleMat = new THREE.MeshStandardMaterial({ map: createMarbleTexture(), roughness: 0.2, metalness: 0.1 });
-                const vaseGeo = new THREE.LatheGeometry([new THREE.Vector2(0.5, -1.5), new THREE.Vector2(0.6, -1), new THREE.Vector2(0.8, 0), new THREE.Vector2(0.6, 1), new THREE.Vector2(0.5, 1.5)], 64);
+                
+                // Beautiful glass/ceramic vase
+                const marbleMat = new THREE.MeshStandardMaterial({ 
+                    map: createMarbleTexture(), 
+                    roughness: 0.15, 
+                    metalness: 0.2,
+                    clearcoat: 0.3
+                });
+                
+                // Elegant vase shape
+                const vaseGeo = new THREE.LatheGeometry([
+                    new THREE.Vector2(0.0, 0.0),
+                    new THREE.Vector2(0.35, 0.05),
+                    new THREE.Vector2(0.45, 0.2),
+                    new THREE.Vector2(0.55, 0.6),
+                    new THREE.Vector2(0.60, 1.0),
+                    new THREE.Vector2(0.55, 1.4),
+                    new THREE.Vector2(0.45, 1.65),
+                    new THREE.Vector2(0.40, 1.7),
+                    new THREE.Vector2(0.38, 1.7)
+                ], 64);
+                
                 const vase = new THREE.Mesh(vaseGeo, marbleMat);
-                vase.position.y = 1.0; 
                 vase.castShadow = true;
+                vase.receiveShadow = true;
                 group.add(vase);
 
-                const roseMat = new THREE.MeshStandardMaterial({ color: 0xb71c1c, roughness: 0.3, emissive: 0x300000 });
-                const stemMat = new THREE.MeshStandardMaterial({ color: 0x1b5e20 });
+                // Flower materials with varied colors
+                const flowerColors = [
+                    { main: 0xc41e3a, emissive: 0x400000 }, // Deep red
+                    { main: 0xff6b9d, emissive: 0x300020 }, // Pink
+                    { main: 0xffb6c1, emissive: 0x200010 }, // Light pink
+                    { main: 0xdc143c, emissive: 0x300005 }, // Crimson
+                    { main: 0xff1493, emissive: 0x400020 }, // Deep pink
+                ];
+                
+                const stemMat = new THREE.MeshStandardMaterial({ 
+                    color: 0x228b22, 
+                    roughness: 0.8 
+                });
+                const leafMat = new THREE.MeshStandardMaterial({ 
+                    color: 0x2e8b57, 
+                    side: THREE.DoubleSide,
+                    roughness: 0.7
+                });
 
-                for(let i=0; i<12; i++) {
-                    const h = 3.5 + Math.random() * 0.8; 
-                    const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, h, 8), stemMat);
-                    stem.position.y = h/2;
+                // Create beautiful curved stem
+                function createCurvedStem(startX, startZ, height, bendX, bendZ) {
+                    const curve = new THREE.CatmullRomCurve3([
+                        new THREE.Vector3(startX, 1.7, startZ),
+                        new THREE.Vector3(startX + bendX * 0.3, 1.7 + height * 0.4, startZ + bendZ * 0.3),
+                        new THREE.Vector3(startX + bendX * 0.6, 1.7 + height * 0.7, startZ + bendZ * 0.6),
+                        new THREE.Vector3(startX + bendX, 1.7 + height, startZ + bendZ)
+                    ]);
                     
-                    const head = new THREE.Mesh(new THREE.DodecahedronGeometry(0.18), roseMat);
-                    head.position.y = h;
-                    
-                    const flowerEnt = new THREE.Group();
-                    flowerEnt.add(stem);
-                    flowerEnt.add(head);
-                    
-                    const angle = (i / 12) * Math.PI * 2;
-                    flowerEnt.position.set(Math.cos(angle)*0.2, 0, Math.sin(angle)*0.2);
-                    flowerEnt.rotation.x = (Math.random()-0.5)*0.5;
-                    flowerEnt.rotation.z = (Math.random()-0.5)*0.5;
-                    group.add(flowerEnt);
+                    const tubeGeo = new THREE.TubeGeometry(curve, 20, 0.025, 8, false);
+                    return new THREE.Mesh(tubeGeo, stemMat);
                 }
-                group.position.set(5.0, 0.15, -2.5);
+
+                // Create realistic rose
+                function createRose(colorData, scale = 1) {
+                    const roseGroup = new THREE.Group();
+                    
+                    // Petal layers
+                    const petalMat = new THREE.MeshStandardMaterial({
+                        color: colorData.main,
+                        emissive: colorData.emissive,
+                        roughness: 0.4,
+                        metalness: 0.1
+                    });
+                    
+                    // Center
+                    const center = new THREE.Mesh(
+                        new THREE.SphereGeometry(0.06 * scale, 16, 16),
+                        petalMat
+                    );
+                    roseGroup.add(center);
+                    
+                    // Outer petals
+                    for (let layer = 0; layer < 3; layer++) {
+                        const numPetals = 5 + layer * 2;
+                        const radius = (0.08 + layer * 0.04) * scale;
+                        
+                        for (let i = 0; i < numPetals; i++) {
+                            const angle = (i / numPetals) * Math.PI * 2 + layer * 0.3;
+                            
+                            const petalGeo = new THREE.SphereGeometry(0.05 * scale, 8, 8);
+                            petalGeo.scale(1, 0.3, 1.5);
+                            
+                            const petal = new THREE.Mesh(petalGeo, petalMat);
+                            petal.position.set(
+                                Math.cos(angle) * radius,
+                                0,
+                                Math.sin(angle) * radius
+                            );
+                            petal.rotation.x = -Math.PI / 3 + layer * 0.2;
+                            petal.rotation.y = angle;
+                            
+                            roseGroup.add(petal);
+                        }
+                    }
+                    
+                    return roseGroup;
+                }
+
+                // Create leaf
+                function createLeaf() {
+                    const leafGeo = new THREE.SphereGeometry(0.08, 8, 8);
+                    leafGeo.scale(1, 0.2, 2);
+                    
+                    const leaf = new THREE.Mesh(leafGeo, leafMat);
+                    leaf.rotation.x = Math.random() * 0.5;
+                    leaf.rotation.y = Math.random() * Math.PI * 2;
+                    
+                    return leaf;
+                }
+
+                // Create natural flower arrangement
+                const flowers = [];
+                
+                // Center flowers (taller)
+                for (let i = 0; i < 3; i++) {
+                    const angle = (i / 3) * Math.PI * 2 + Math.random() * 0.5;
+                    const radius = 0.08;
+                    
+                    const colorData = flowerColors[Math.floor(Math.random() * flowerColors.length)];
+                    const rose = createRose(colorData, 0.8 + Math.random() * 0.2);
+                    
+                    const height = 2.2 + Math.random() * 0.4;
+                    const bendX = Math.cos(angle) * 0.15;
+                    const bendZ = Math.sin(angle) * 0.15;
+                    
+                    const stem = createCurvedStem(
+                        Math.cos(angle) * radius,
+                        Math.sin(angle) * radius,
+                        height,
+                        bendX,
+                        bendZ
+                    );
+                    
+                    group.add(stem);
+                    
+                    rose.position.set(
+                        Math.cos(angle) * radius + bendX,
+                        1.7 + height,
+                        Math.sin(angle) * radius + bendZ
+                    );
+                    rose.rotation.x = (Math.random() - 0.5) * 0.3;
+                    rose.rotation.y = Math.random() * Math.PI * 2;
+                    
+                    group.add(rose);
+                    flowers.push({ stem, rose });
+                }
+
+                // Middle layer flowers
+                for (let i = 0; i < 5; i++) {
+                    const angle = (i / 5) * Math.PI * 2 + Math.random() * 0.4;
+                    const radius = 0.15 + Math.random() * 0.05;
+                    
+                    const colorData = flowerColors[Math.floor(Math.random() * flowerColors.length)];
+                    const rose = createRose(colorData, 0.7 + Math.random() * 0.15);
+                    
+                    const height = 1.8 + Math.random() * 0.4;
+                    const bendX = Math.cos(angle) * (0.2 + Math.random() * 0.1);
+                    const bendZ = Math.sin(angle) * (0.2 + Math.random() * 0.1);
+                    
+                    const stem = createCurvedStem(
+                        Math.cos(angle) * radius,
+                        Math.sin(angle) * radius,
+                        height,
+                        bendX,
+                        bendZ
+                    );
+                    
+                    group.add(stem);
+                    
+                    rose.position.set(
+                        Math.cos(angle) * radius + bendX,
+                        1.7 + height,
+                        Math.sin(angle) * radius + bendZ
+                    );
+                    rose.rotation.x = (Math.random() - 0.5) * 0.4;
+                    rose.rotation.y = Math.random() * Math.PI * 2;
+                    rose.rotation.z = (Math.random() - 0.5) * 0.3;
+                    
+                    group.add(rose);
+                    flowers.push({ stem, rose });
+                    
+                    // Add leaves
+                    if (Math.random() > 0.4) {
+                        const leaf = createLeaf();
+                        leaf.position.set(
+                            Math.cos(angle) * radius * 1.2,
+                            1.7 + height * 0.5,
+                            Math.sin(angle) * radius * 1.2
+                        );
+                        group.add(leaf);
+                    }
+                }
+
+                // Outer layer flowers (shorter, more spread)
+                for (let i = 0; i < 4; i++) {
+                    const angle = (i / 4) * Math.PI * 2 + Math.PI / 8 + Math.random() * 0.3;
+                    const radius = 0.25;
+                    
+                    const colorData = flowerColors[Math.floor(Math.random() * flowerColors.length)];
+                    const rose = createRose(colorData, 0.6 + Math.random() * 0.1);
+                    
+                    const height = 1.5 + Math.random() * 0.3;
+                    const bendX = Math.cos(angle) * (0.25 + Math.random() * 0.1);
+                    const bendZ = Math.sin(angle) * (0.25 + Math.random() * 0.1);
+                    
+                    const stem = createCurvedStem(
+                        Math.cos(angle) * radius,
+                        Math.sin(angle) * radius,
+                        height,
+                        bendX,
+                        bendZ
+                    );
+                    
+                    group.add(stem);
+                    
+                    rose.position.set(
+                        Math.cos(angle) * radius + bendX,
+                        1.7 + height,
+                        Math.sin(angle) * radius + bendZ
+                    );
+                    rose.rotation.x = (Math.random() - 0.5) * 0.5;
+                    rose.rotation.y = Math.random() * Math.PI * 2;
+                    rose.rotation.z = (Math.random() - 0.5) * 0.4;
+                    
+                    group.add(rose);
+                    flowers.push({ stem, rose });
+                    
+                    // Add leaves
+                    const leaf = createLeaf();
+                    leaf.position.set(
+                        Math.cos(angle) * radius * 1.5,
+                        1.7 + height * 0.4,
+                        Math.sin(angle) * radius * 1.5
+                    );
+                    group.add(leaf);
+                }
+
+                // Add filler greenery
+                for (let i = 0; i < 8; i++) {
+                    const angle = Math.random() * Math.PI * 2;
+                    const radius = 0.15 + Math.random() * 0.15;
+                    
+                    const leaf = createLeaf();
+                    leaf.scale.set(0.6 + Math.random() * 0.4, 1, 0.6 + Math.random() * 0.4);
+                    leaf.position.set(
+                        Math.cos(angle) * radius,
+                        1.8 + Math.random() * 1.2,
+                        Math.sin(angle) * radius
+                    );
+                    
+                    group.add(leaf);
+                }
+                
+                // Position on table
+                group.position.set(5.0, 0.0, -2.5);
                 sceneGroup.add(group);
             }
 
@@ -567,7 +801,6 @@
 
             // --- LOGIC ---
             function onMouseMove(e) {
-                // PERBAIKAN: Rotasi hanya jika drag DAN popup tidak terbuka
                 if (isDragging && !isPopupOpen) {
                     targetRotationY += e.movementX * 0.005;
                     targetRotationX += e.movementY * 0.005;
@@ -576,7 +809,6 @@
             }
 
             function onCanvasClick(e) {
-                // Jika popup terbuka, jangan lakukan apa-apa
                 if(isPopupOpen) return;
 
                 mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
@@ -595,7 +827,7 @@
 
             window.closeCardPopup = function() {
                 document.getElementById('birthdayCardPopup').classList.remove('visible');
-                isPopupOpen = false; // Reset flag
+                isPopupOpen = false;
                 triggerConfettiSurprise();
                 if(!hands) {
                     initMediaPipe();
@@ -603,7 +835,7 @@
             }
 
             function openGreetingCard() {
-                isPopupOpen = true; // Set flag untuk blokir rotasi
+                isPopupOpen = true;
                 document.getElementById('birthdayCardPopup').classList.add('visible');
                 if (birthdaySong) {
                     birthdaySong.play().catch(e => console.log("Audio blocked", e));
@@ -618,7 +850,6 @@
                 
                 videoElement = document.getElementById('videoElement');
 
-                // Check File Protocol
                 if (window.location.protocol === 'file:') {
                     loadingText.innerText = "ERROR: Use Live Server";
                     document.getElementById('startCameraBtn').style.display = 'block';
@@ -630,7 +861,6 @@
                     return;
                 }
 
-                // MediaPipe Hands Setup
                 hands = new Hands({locateFile: (file) => {
                     return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
                 }});
@@ -644,8 +874,6 @@
                 
                 hands.onResults(onResults);
 
-                // PERBAIKAN: Menggunakan Camera Utility dari MediaPipe
-                // Ini cara paling stabil untuk handle stream & permission
                 const mpCamera = new Camera(videoElement, {
                     onFrame: async () => {
                         if (hands) {
@@ -659,7 +887,7 @@
                 mpCamera.start()
                 .then(() => {
                     loading.style.display = 'none';
-                    console.log("Camera started successfully via MediaPipe Utility");
+                    console.log("Camera started successfully");
                 })
                 .catch(err => {
                     console.error("Camera start failed:", err);
